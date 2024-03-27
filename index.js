@@ -9,7 +9,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors({origin:"https://imposing-ratio-376319.web.app", credentials:true}));
+app.use(cors({origin:"http://localhost:5173", credentials:true}));
 //app.use(cors())
 app.use(express.json());
 
@@ -18,6 +18,9 @@ const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 const db = client.db('assignment');
 const postCollection = db.collection("posts")
+const commentsCollection = db.collection("comments")
+const testimonialsCollection = db.collection("testimonials")
+const volunteerCollection = db.collection("volinteers")
 async function run() {
     try {
         // Connect to MongoDB
@@ -81,6 +84,47 @@ async function run() {
             
         });
 
+             // get all posts about reliefItems
+             app.get('/api/v1/users', async (req, res) => {
+                try {
+                    // Fetch users from the collection and sort them by donationAmount in descending order
+                    const posts = await collection.find().sort({ donationAmount: -1 }).toArray();
+                    res.json(posts);
+                } catch (error) {
+                    console.error("Error fetching data from users collection:", error);
+                    res.status(500).json({ message: "Internal Server Error" });
+                }
+            });
+            
+        app.put('/api/v1/update-user/:email', async (req, res) => {
+    try {
+        const userEmail = req.params.email;
+        const { donationAmount } = req.body; // Extract donationAmount from the request body
+        const user = await collection.findOne({ email: userEmail });
+        
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found" });
+        }
+
+        let updatedDonationAmount = donationAmount; // Initialize with the new donation amount
+
+        if (user.donationAmount) {
+            // If the user already has a donation amount, add the new donation amount to it
+            updatedDonationAmount = parseInt(user.donationAmount) + parseInt(donationAmount);
+        }
+
+        // Update the user's donationAmount
+        await collection.updateOne({ email: userEmail }, { $set: { donationAmount: updatedDonationAmount.toString() } });
+        
+        res.status(200).json({
+            success: true,
+            message: "Donation amount updated successfully",
+        });
+    } catch (error) {
+        console.error("Error updating user donation amount:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
 
         // ==============================================================
         // WRITE YOUR CODE HERE
@@ -152,8 +196,86 @@ async function run() {
                 res.status(500).json({ message: "Internal Server Error" });
             }
         });
+        // get all posts about comments
+        app.get('/api/v1/community', async (req, res) => {
+            try {
+                const comments = await commentsCollection.find().toArray();
         
+                // Get the list of unique email addresses from the comments
+                const uniqueEmails = [...new Set(comments.map(comment => comment.email))];
         
+                // Fetch user names for each unique email
+                const users = await collection.find({ email: { $in: uniqueEmails } }).toArray();
+                const emailToNameMap = users.reduce((acc, user) => {
+                    acc[user.email] = user.name;
+                    return acc;
+                }, {});
+        
+                // Update comments with user names
+                const commentsWithNames = comments.map(comment => ({
+                    ...comment,
+                    name: emailToNameMap[comment.email] || 'Unknown', // Default to 'Unknown' if no name found
+                }));
+        
+                res.json(commentsWithNames);
+                //console.log( res.json(commentsWithNames))
+            } catch (error) {
+                console.error("Error fetching data from comments collection:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+            }
+        });
+        
+          app.post('/api/v1/community', async (req, res) => {
+            try{
+                
+                await commentsCollection.insertOne(req.body);
+                res.status(201).json({
+                    success: true,
+                    message: "Data posted successfully to posts collection",
+                  });
+                }   catch (error) {
+                console.error("Error inserting data in comments collection:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+              }
+            })
+
+         app.post('/api/v1/dashboard/create-testimonial', async (req, res) => {
+            try{
+                
+                await testimonialsCollection.insertOne(req.body);
+                res.status(201).json({
+                    success: true,
+                    message: "Data posted successfully to posts collection",
+                  });
+                }   catch (error) {
+                console.error("Error inserting data in comments collection:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+              }
+            })
+
+          app.post('/api/v1/volunteer', async (req, res) => {
+            try{
+                
+                await volunteerCollection.insertOne(req.body);
+                res.status(201).json({
+                    success: true,
+                    message: "Data posted successfully to the collection",
+                  });
+                }   catch (error) {
+                console.error("Error inserting data in the collection:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+              }
+            })
+            app.get('/api/v1/about-us', async (req, res) => {
+            try{
+                const volunteers = await volunteerCollection.find().toArray();
+                res.json(volunteers);
+        }
+            catch (error) {
+                console.error("Error fetching data from volunteers collection:", error);
+                res.status(500).json({ message: "Internal Server Error" });
+              }
+        });
         // ==============================================================
 
 
